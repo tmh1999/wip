@@ -1,0 +1,35 @@
+# Contributor: Natanael Copa <ncopa@alpinelinux.org>
+# Maintainer:
+pkgname=s390-tools
+pkgver=1.37.0
+pkgrel=0
+pkgdesc="Utilities and daemons for IBM System/z"
+url="http://www.ibm.com/developerworks/linux/linux390/s390-tools.html"
+arch="all"
+license="GPLv2 and GPLv2+ and CPL"
+depends=""
+depends_dev=""
+makedepends="$depends_dev libexecinfo-dev zlib-dev fuse-dev"
+install=""
+subpackages="$pkgname-dev $pkgname-doc"
+source="http://download.boulder.ibm.com/ibmdl/pub/software/dw/linux390/ht_src/s390-tools-$pkgver.tar.bz2
+	zipl-flags.patch
+	musl-fixes.patch
+	"
+builddir="$srcdir/s390-tools-$pkgver"
+
+build() {
+	cd "$builddir"
+	make V=1 CFLAGS="$CFLAGS -D_GNU_SOURCE" \
+		HAVE_SNMP=0 \
+		LIBEXECINFO_LIBS="-lexecinfo"
+}
+
+package() {
+	cd "$builddir"
+	make DESTDIR="$pkgdir" install
+}
+
+sha512sums="3667ba4eb7e2b74629958f530002953adebe6e41d6429c99ae5f82d1406d6963aacdc35b63114683c365b9fa40ac32b4c22f226918ecb53423e80f944d24cb9c  s390-tools-1.37.0.tar.bz2
+3e1d0829e13bea69f48c556c2454b2927ffc59a7f4a04f7ebce41b9b5ed95ce963922fec9981e7ae62be801abbdc2cd27498399d0c4b8f9d10fae82dc3a9df85  zipl-flags.patch
+53917ef77142eb1304f7a900eb9a624b5bad5b263110f5875ab7710b52350e1b56d42d048b5bedc9ee6780d9f014c903f047f25d347ba677dfe141eb125b1543  musl-fixes.patch"
