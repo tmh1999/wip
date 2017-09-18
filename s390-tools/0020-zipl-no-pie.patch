@@ -11,3 +11,45 @@ index 6474aad..96edc59 100644
  
  %.bin:	%.exec
  	$(OBJCOPY) -O binary \
+ete-null-pointer-checks -fno-strict-aliasing \
+@@ -54,11 +54,11 @@ stage3.exec: head.o stage3.o kdump3.o libc.o sclp.o sclp_stage3.o \
+ 			}' \
+ 	); \
+ 	case $$STAGE in \
+-		0) SFLAGS="-nostdlib -Wl,-Ttext,0";; \
+-		1) SFLAGS="-nostdlib -Wl,-Ttext,0x18";; \
+-		1b) SFLAGS="-nostdlib -Wl,-Ttext,0xE000";; \
+-		2) SFLAGS="-nostdlib -Wl,-T,stage2.lds";; \
+-		3) SFLAGS="-nostdlib -Wl,-T,stage3.lds";; \
++		0) SFLAGS="-no-pie -nostdlib -Wl,-Ttext,0";; \
++		1) SFLAGS="-no-pie -nostdlib -Wl,-Ttext,0x18";; \
++		1b) SFLAGS="-no-pie -nostdlib -Wl,-Ttext,0xE000";; \
++		2) SFLAGS="-no-pie -nostdlib -Wl,-T,stage2.lds";; \
++		3) SFLAGS="-no-pie -nostdlib -Wl,-T,stage3.lds";; \
+ 	esac; \
+ 	$(LINK) -no-pie $$SFLAGS -m64 $^ -o $@
+ 
+@@ -77,7 +77,7 @@ stage3.exec: head.o stage3.o kdump3.o libc.o sclp.o sclp_stage3.o \
+ 		$< $@
+ 
+ data.o: $(FILES)
+-	$(LD) -r -b binary -o data.o $(FILES)
++	$(LD) -no-pie -r -b binary -o data.o $(FILES)
+ 
+ data.h: data.o
+ 	rm -f data.h
+diff --git a/zipl/src/Makefile b/zipl/src/Makefile
+index 0ea0077..74b0bdb 100644
+--- a/zipl/src/Makefile
++++ b/zipl/src/Makefile
+@@ -7,8 +7,8 @@ ALL_CPPFLAGS += -I../include -I../boot -I../../include \
+ 	    -DZFCPDUMP_FS_RD=$(ZFCPDUMP_FS_RD) \
+ 	    -DZFCPDUMP_PART_IMAGE=$(ZFCPDUMP_PART_IMAGE) \
+ 	    -DZFCPDUMP_PART_RD=$(ZFCPDUMP_PART_RD) \
+-	    -D_FILE_OFFSET_BITS=64
+-ALL_LDFLAGS += -Wl,-z,noexecstack
++	    -D_FILE_OFFSET_BITS=64 -no-pie
++ALL_LDFLAGS += -Wl,-z,noexecstack -no-pie
+ 
+ libs =	$(rootdir)/libutil/libutil.a \
+ 	$(rootdir)/libu2s/libu2s.a
