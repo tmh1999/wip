@@ -1,3 +1,6 @@
+Picked from include/paths.h.
+See more http://www.openwall.com/lists/musl/2014/03/29/5
+
 diff --git a/hyptop/helper.c b/hyptop/helper.c
 index 1212bda..733fd4e 100644
 --- a/hyptop/helper.c
