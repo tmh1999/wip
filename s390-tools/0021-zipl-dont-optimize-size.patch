@@ -1,0 +1,13 @@
+diff --git a/zipl/src/Makefile b/zipl/src/Makefile
+index c526a46..2b1317c 100644
+--- a/zipl/src/Makefile
++++ b/zipl/src/Makefile
+@@ -1,6 +1,8 @@
+ # Common definitions
+ include ../../common.mak
+ 
++CFLAGS := $(filter-out -Os,$(CFLAGS))
++
+ ALL_CPPFLAGS += -I../include -I../boot -I../../include \
+ 	    -DZFCPDUMP_DIR=$(ZFCPDUMP_DIR) \
+ 	    -DZFCPDUMP_FS_IMAGE=$(ZFCPDUMP_FS_IMAGE) \
