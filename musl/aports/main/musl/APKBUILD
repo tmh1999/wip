@@ -1,0 +1,165 @@
+# Contributor: William Pitcock <nenolod@dereferenced.org>
+# Maintainer: Timo Teräs <timo.teras@iki.fi>
+pkgname=musl
+pkgver=1.1.18
+pkgrel=6
+gitver=a223dbd27ae36fe53f9f67f86caf685b729593fc
+pkgdesc="the musl c library (libc) implementation"
+url="http://www.musl-libc.org/"
+arch="all"
+license="MIT"
+depends=""
+depends_dev="!uclibc-dev"
+makedepends="$depends_dev"
+subpackages="$pkgname-dev $pkgname-dbg libc6-compat:compat:noarch"
+case "$BOOTSTRAP" in
+nocc)	pkgname="musl-dev"; subpackages="";;
+nolibc) ;;
+*)	subpackages="$subpackages $pkgname-utils";;
+esac
+#source="http://www.musl-libc.org/releases/musl-$pkgver.tar.gz
+source="musl-$pkgver.tar.gz::http://git.musl-libc.org/cgit/musl/snapshot/musl-$gitver.tar.gz
+	0001-fix-sysconf-for-infinite-rlimits.patch
+	0001-use-the-name-UTC-instead-of-GMT-for-UTC-timezone.patch
+	0001-track-pthread-stack-guard-sizes.patch
+	1000-implement-strftime-GNU-extension-padding-specifiers-.patch
+	2000-pthread-internals-increase-DEFAULT_GUARD_SIZE-to-2-p.patch
+	3002-stdio-implement-fopencookie-3.patch
+
+	ldconfig
+	__stack_chk_fail_local.c
+	getconf.c
+	getent.c
+	iconv.c
+
+	ibm1047-official.patch
+	"
+
+# secfixes:
+#   1.1.15-r4:
+#     - CVE-2016-8859
+
+builddir="$srcdir"/musl-$gitver
+
+build() {
+	cd "$builddir"
+
+	[ "$BOOTSTRAP" = "nocc" ] && return 0
+
+	# provide minimal libssp_nonshared.a so we don't need libssp from gcc
+	${CROSS_COMPILE}gcc $CPPFLAGS $CFLAGS -c "$srcdir"/__stack_chk_fail_local.c -o __stack_chk_fail_local.o || return 1
+	${CROSS_COMPILE}ar r libssp_nonshared.a __stack_chk_fail_local.o || return 1
+
+	if [ "$BOOTSTRAP" != "nolibc" ]; then
+		# getconf/getent/iconv
+		local i
+		for i in getconf getent iconv ; do
+			${CROSS_COMPILE}gcc $CPPFLAGS $CFLAGS "$srcdir"/$i.c -o $i || return 1
+		done
+	fi
+
+	# note: not autotools
+	LDFLAGS="$LDFLAGS -Wl,-soname,libc.musl-${CARCH}.so.1" \
+	./configure \
+		--build=$CBUILD \
+		--host=$CHOST \
+		--prefix=/usr \
+		--sysconfdir=/etc \
+		--mandir=/usr/share/man \
+		--infodir=/usr/share/info \
+		--localstatedir=/var \
+		|| return 1
+	make || return 1
+}
+
+package() {
+	cd "$builddir"
+
+	if [ "$BOOTSTRAP" = "nocc" ]; then
+		case "$CARCH" in
+		aarch64*)	ARCH="aarch64" ;;
+		arm*)		ARCH="arm" ;;
+		x86)		ARCH="i386" ;;
+		x86_64)		ARCH="x86_64" ;;
+		ppc)		ARCH="powerpc" ;;
+		ppc64*)		ARCH="powerpc64" ;;
+		s390*)		ARCH="s390x" ;;
+		mips64*)	ARCH="mips64" ;;
+		mips*)		ARCH="mips" ;;
+		esac
+
+		make ARCH="$ARCH" prefix=/usr DESTDIR="$pkgdir" install-headers || return 1
+	else
+		make DESTDIR="$pkgdir" install || return 1
+
+		cp libssp_nonshared.a "$pkgdir"/usr/lib || return 1
+
+		# make LDSO the be the real file, and libc the symlink
+		local LDSO=$(make -f Makefile --eval "$(echo -e 'print-ldso:\n\t@echo $$(basename $(LDSO_PATHNAME))')" print-ldso)
+		mv -f "$pkgdir"/usr/lib/libc.so "$pkgdir"/lib/"$LDSO" || return 1
+		ln -sf "$LDSO" "$pkgdir"/lib/libc.musl-${CARCH}.so.1 || return 1
+		ln -sf ../../lib/"$LDSO" "$pkgdir"/usr/lib/libc.so || return 1
+		mkdir -p "$pkgdir"/usr/bin || return 1
+		ln -sf ../../lib/"$LDSO" "$pkgdir"/usr/bin/ldd || return 1
+	fi
+
+	# remove libintl.h, currently we don't want by default any NLS
+	# and use GNU gettext where needed. the plan is to migrate to
+	# musl gettext() later on as fully as possible.
+	rm "$pkgdir"/usr/include/libintl.h || return 1
+}
+
+utils() {
+	depends="!uclibc-utils scanelf"
+	replaces="libiconv uclibc-utils"
+	license="MIT BSD GPL2+"
+
+	mkdir -p "$subpkgdir"/usr "$subpkgdir"/sbin
+	mv "$pkgdir"/usr/bin "$subpkgdir"/usr/ || return 1
+
+	install -D \
+		"$builddir"/getent \
+		"$builddir"/getconf \
+		"$builddir"/iconv \
+		"$subpkgdir"/usr/bin
+
+	install -D -m755 "$srcdir"/ldconfig "$subpkgdir"/sbin
+}
+
+compat() {
+	pkgdesc="compatibility libraries for glibc"
+
+	mkdir -p "$subpkgdir"/lib
+	case "$CARCH" in
+	armel) _ld="ld-linux.so.3" ;;
+	armhf | armv7) _ld="ld-linux-armhf.so.3" ;;
+	aarch64) _ld="ld-linux-aarch64.so.1" ;;
+	x86) _ld="ld-linux.so.2" ;;
+	x86_64) _ld="ld-linux-x86-64.so.2"
+		# go precompiled binary uses /lib64/ld-linux-x86-64.so.2
+		# so we add a symlink
+		ln -s lib "$subpkgdir"/lib64
+		;;
+	mips* | s390*) _ld="ld.so.1" ;;
+	ppc64le) _ld="ld64.so.2" ;;
+	esac
+	ln -sf "/lib/libc.musl-${CARCH}.so.1" "$subpkgdir/lib/$_ld"
+
+	for i in libc.so.6 libcrypt.so.1 libm.so.6 libpthread.so.0 librt.so.1 libutil.so.1; do
+		ln -sf "/lib/libc.musl-${CARCH}.so.1" "$subpkgdir/lib/$i"
+	done
+}
+
+sha512sums="0d3c28f8598a2a2b44119da6e8a8cff2ce9b6ef95d8fb761b3ea182b3acb8cfea7f67504f13d72dee640ccce45762d6d27a851839e5e801d654b7ac9523fd7d3  musl-1.1.18.tar.gz
+7b44cc006d37672a67bc261de33e64d11f6426fd1ab3ff80f9f980aefc8e0b099ab61f95d110eeb59f75c2fe772fe13bc5546c194c3f90ca9ec4c812dfff6b1b  0001-fix-sysconf-for-infinite-rlimits.patch
+c28abac671f531d200bd1ebc934fc57b1c04404e49237dd6cfde4fe72e4fd8b855df0e75f76d62ec930c56daa00a12a6a3b3bb1c86576c7504fdf9628ad58975  0001-use-the-name-UTC-instead-of-GMT-for-UTC-timezone.patch
+455ad7f2d7c32af536d47c9fcfbfcb259aceb07c461b8c0bb26466b2210ea58e343f3b3e34c50bb945da9206866c6fc70b6aa73402c06b558abba8108b3ce630  0001-track-pthread-stack-guard-sizes.patch
+7e4c703e57a3564cd3ee1d5334b806cbe654355179ba55d4d25361dfc555eb4a7d081d80d64fdaff8476949afd04558d278b124d1fb108080beaa5ba2f8ce2b9  1000-implement-strftime-GNU-extension-padding-specifiers-.patch
+2c8e1dde1834238097b2ee8a7bfb53471a0d9cff4a5e38b55f048b567deff1cdd47c170d0578a67b1a039f95a6c5fbb8cff369c75b6a3e4d7ed171e8e86ebb8c  2000-pthread-internals-increase-DEFAULT_GUARD_SIZE-to-2-p.patch
+bdc6fe197779088507d6f8bb72560239f908a635b39eb677bfcf91da28b92ee52b67696e627dad08ccb8a7dcaf7a72b574276098fb3fddd4a6b646a0f0799785  3002-stdio-implement-fopencookie-3.patch
+8d3a2d5315fc56fee7da9abb8b89bb38c6046c33d154c10d168fb35bfde6b0cf9f13042a3bceee34daf091bc409d699223735dcf19f382eeee1f6be34154f26f  ldconfig
+062bb49fa54839010acd4af113e20f7263dde1c8a2ca359b5fb2661ef9ed9d84a0f7c3bc10c25dcfa10bb3c5a4874588dff636ac43d5dbb3d748d75400756d0b  __stack_chk_fail_local.c
+0d80f37b34a35e3d14b012257c50862dfeb9d2c81139ea2dfa101d981d093b009b9fa450ba27a708ac59377a48626971dfc58e20a3799084a65777a0c32cbc7d  getconf.c
+378d70e65bcc65bb4e1415354cecfa54b0c1146dfb24474b69e418cdbf7ad730472cd09f6f103e1c99ba6c324c9560bccdf287f5889bbc3ef0bdf0e08da47413  getent.c
+9d42d66fb1facce2b85dad919be5be819ee290bd26ca2db00982b2f8e055a0196290a008711cbe2b18ec9eee8d2270e3b3a4692c5a1b807013baa5c2b70a2bbf  iconv.c
+4bcccaee8e5f02656a8aa2ae1be14de50df67a52bae9cc2e07536416c85b95bb9d33860876f0fba30eb2e398a0df3aa8552e11d4b6388b0b5b65653e93472989  ibm1047-official.patch"
