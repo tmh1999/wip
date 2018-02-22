@@ -40,8 +40,9 @@ zipl_gen_conf() {
 	RAMDISK_FLAVOR="-vanilla"
 	
 	rootdev=$(find_mount_dev "/")
-	ROOT_UUID=$(uuid_or_device $rootdev)
-	
+	root_uuid=$(uuid_or_device $rootdev)
+	[ -n "$root_uuid" ] && root_parm="root=$root_uuid"
+
 	cat > /etc/zipl.conf <<- EOF
 	[defaultboot]
 	defaultauto
@@ -52,7 +53,7 @@ zipl_gen_conf() {
 	[linux]
 		image=/boot/vmlinuz$KERNEL_FLAVOR
 		ramdisk=/boot/initramfs$RAMDISK_FLAVOR
-		parameters="root=$ROOT_UUID rd.md=0 rd.dm=0 rd.luks=0 KEYTABLE=us LANG=en_US.UTF-8"
+		parameters="$root_parm rd.md=0 rd.dm=0 rd.luks=0 KEYTABLE=us LANG=en_US.UTF-8"
 	EOF
 }
 
