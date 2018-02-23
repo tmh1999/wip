@@ -27,15 +27,7 @@ find_mount_dev() {
 	awk "\$2 == \"$mnt\" { print \$1 }" /proc/mounts | tail -n 1
 }
 
-# zipl functions
-zipl_backup_conf() {
-	# TODO : implement this
-	echo 1
-}
-
 zipl_gen_conf() {
-	# TODO : hard-code FLAVOR for now
-	# TODO : back up /etc/zipl.conf before override
 	KERNEL_FLAVOR="-vanilla"
 	RAMDISK_FLAVOR="-vanilla"
 	

@@ -1,5 +1,4 @@
 #!/bin/sh
 
-/sbin/s390-tools-script zipl_backup_conf
 /sbin/s390-tools-script zipl_gen_conf
 
